@@ -8,10 +8,9 @@ to a QR generator.
 `totptool --help`
 
 ### Generating a new TOTP
-To generate a new secret:
-`totptool -h <algorithm> -i <issuer> [-t <validity>] -u <email>`
+`totptool [-h <hash algorithm>] -i <issuer> [-v <validity>] -u <user email>`
 ### Verifying a Token
-`totptool [-h <algorithm>] -s <secret> -v <token>`
+`totptool [-h <hash algorithm>] -s <secret> -t <token>`
 
 ## Example
 This example shows how use the tool to create a new SHA256 based TOTP by issuer
