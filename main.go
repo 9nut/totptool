@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"flag"
+	"log"
 	"os"
 	"time"
 
@@ -19,9 +19,10 @@ var algorithms map[string]otp.Algorithm = map[string]otp.Algorithm {
 }
 
 func main() {
-	secr := flag.String("s", "", "secret; user is prompted for code to validate")
+	secr := flag.String("s", "", "user's secret for validation")
+	toke := flag.String("t", "", "user's token to validate")
 	size := flag.Uint("n", 20, "size of secret in bytes")
-	expt := flag.Uint("t", 30, "validity period in seconds")
+	expt := flag.Uint("v", 30, "validity period in seconds")
 	halg := flag.String("h", "sha1", "algorithm (sha1, sha256, sha512, md5)")
 	user := flag.String("u", "user@example.com", "user email or id")
 	issu := flag.String("i", "Example.com", "issuer name")
@@ -29,21 +30,26 @@ func main() {
 
 	algo, ok := algorithms[*halg]
 	if !ok {
-		fmt.Println("illegal algorithm: ", *halg)
-		os.Exit(1)
+		log.Fatal("illegal algorithm: ", *halg)
 	}
 
 	if *size != 20 {
-		fmt.Println("warning: secret size other than 20 may not work")
+		log.Println("warning: secret size other than 20 may not work")
 	}
 
+	// Verification -- if secret is not empty, token must also be provided
 	if *secr != "" {
+		if *toke == "" {
+			log.Fatal("missing token")
+		}
 		vopt := totp.ValidateOpts{Period: *expt, Skew: 1, Digits: otp.DigitsSix, Algorithm: algo}
-		validateTOTP(*secr, vopt)
-		os.Exit(0)
+		if validateTOTP(*secr, *toke, vopt) {
+			os.Exit(0)
+		}
+		os.Exit(1)
 	}
 
-	// Generate a TOTP key
+	// Generation -- generate a new TOTP secret
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      *issu,
 		AccountName: *user,
@@ -53,31 +59,27 @@ func main() {
 		Digits: otp.DigitsSix,
 	})
 	if err != nil {
-		fmt.Println("Error generating TOTP key:", err)
-		os.Exit(2)
+		log.Fatal(err)
 	}
 
-	// Display the key's secret and QR code for the user
+	// Send the secret to STDERR so that a shell script
+	// can generate the QR and store the secret without having
+	// to parse things
 	fmt.Fprintln(os.Stderr, "Secret:", key.Secret())
 	fmt.Print(key)
 }
 
 // prompt for TOTP and validate it
-func validateTOTP(secret string, vopt totp.ValidateOpts) {
-	fmt.Print("Enter the OTP from your authenticator app: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	tok := scanner.Text()
-
+func validateTOTP(secret, tok string, vopt totp.ValidateOpts) bool {
 	ok, err := totp.ValidateCustom(tok, secret, time.Now().UTC(), vopt)
 	if err != nil {
-		fmt.Println("Validation error: ", err)
-		return
+		log.Fatal(err)
 	}
 	if ok {
 		fmt.Println("👍")
 	} else {
 		fmt.Println("👎")
 	}
+	return ok
 }
 
